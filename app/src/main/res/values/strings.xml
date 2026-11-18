@@ -10,4 +10,16 @@
     <string name="btn_sign_in_google">Sign in with Google</string>
     <string name="btn_sign_out">Keluar Akun</string>
     <string name="safe_zone_label">SAFE ZONE</string>
+    <string name="btn_leaderboard">Top 10 Skor</string>
+    <string name="leaderboard_title">TOP 10 PLAYER SCORES</string>
+    <string name="leaderboard_subtitle">Papan peringkat skor tertinggi kota Vice Roam secara real-time</string>
+    <string name="leaderboard_sync_score">Kirim Skor Saya</string>
+    <string name="leaderboard_refresh">Muat Ulang</string>
+    <string name="leaderboard_empty">Belum ada skor tercatat. Jadilah pemain pertama di Top 10!</string>
+    <string name="leaderboard_retry">Coba Lagi</string>
+    <string name="leaderboard_you_badge">ANDA</string>
+    <string name="btn_system_apk">Unduh APK &amp; Update</string>
+    <string name="system_apk_title">Unduh APK &amp; Pembaruan Sistem</string>
+    <string name="btn_save_apk">Simpan File .APK</string>
+    <string name="btn_open_update_link">Buka Halaman Pembaruan</string>
 </resources>

@@ -137,7 +137,7 @@ fun OnlineLobbyRoute(
 }
 
 @Composable
-private fun OnlineAuthScreen(
+internal fun OnlineAuthScreen(
   onBackToMenu: () -> Unit,
   onAuthSuccess: () -> Unit,
 ) {

@@ -32,6 +32,7 @@ import kotlinx.coroutines.launch
 enum class AppRoute {
   MAIN_MENU,
   ONLINE_LOBBY,
+  LEADERBOARD,
   IN_GAME,
 }
 
@@ -51,11 +52,19 @@ class MainGameViewModel(application: Application) : AndroidViewModel(application
   private val _profile = MutableStateFlow(PlayerProfileState())
   val profile: StateFlow<PlayerProfileState> = _profile.asStateFlow()
 
+  private val _releaseUrl = MutableStateFlow("")
+  val releaseUrl: StateFlow<String> = _releaseUrl.asStateFlow()
+
   init {
     viewModelScope.launch {
       localPrefs.profileFlow.collect { saved ->
         _profile.value = saved
         gameEngine.updateProfileSettings(saved)
+      }
+    }
+    viewModelScope.launch {
+      localPrefs.releaseUrlFlow.collect { url ->
+        _releaseUrl.value = url
       }
     }
     gameEngine.onSaveProfileProgress = { newCash, unlocked ->
@@ -79,6 +88,14 @@ class MainGameViewModel(application: Application) : AndroidViewModel(application
 
   fun updateSettings(quality: GraphicsQuality, sensitivity: Float, volume: Float) {
     updateProfile(_profile.value.copy(graphicsQuality = quality, cameraSensitivity = sensitivity, audioVolume = volume))
+  }
+
+  fun updateReleaseUrl(url: String) {
+    val clean = url.trim().take(300)
+    _releaseUrl.value = clean
+    viewModelScope.launch {
+      localPrefs.saveReleaseUrl(clean)
+    }
   }
 
   fun navigateTo(target: AppRoute) {

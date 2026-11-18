@@ -28,6 +28,11 @@ class LocalPreferencesRepository(context: Context) {
     val GRAPHICS = stringPreferencesKey("graphics_quality")
     val SENSITIVITY = floatPreferencesKey("camera_sensitivity")
     val VOLUME = floatPreferencesKey("audio_volume")
+    val RELEASE_URL = stringPreferencesKey("release_update_url")
+  }
+
+  val releaseUrlFlow: Flow<String> = dataStore.data.map { prefs ->
+    prefs[Keys.RELEASE_URL] ?: ""
   }
 
   val profileFlow: Flow<PlayerProfileState> = dataStore.data.map { prefs ->
@@ -58,6 +63,12 @@ class LocalPreferencesRepository(context: Context) {
       prefs[Keys.GRAPHICS] = state.graphicsQuality.name
       prefs[Keys.SENSITIVITY] = state.cameraSensitivity.coerceIn(0.2f, 2.5f)
       prefs[Keys.VOLUME] = state.audioVolume.coerceIn(0.0f, 1.0f)
+    }
+  }
+
+  suspend fun saveReleaseUrl(url: String) {
+    dataStore.edit { prefs ->
+      prefs[Keys.RELEASE_URL] = url.trim().take(300)
     }
   }
 }

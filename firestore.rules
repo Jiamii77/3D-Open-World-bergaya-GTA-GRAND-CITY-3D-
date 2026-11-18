@@ -91,6 +91,16 @@ service cloud.firestore {
              isValidTimestamp(data.createdAt);
     }
 
+    function isValidLeaderboardScore(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.nickname is string && data.nickname.size() >= 2 && data.nickname.size() <= 20 &&
+             data.score is int && data.score >= 0 && data.score <= 999999999 &&
+             data.skinColorIndex is int && data.skinColorIndex >= 0 && data.skinColorIndex <= 5 &&
+             data.outfitColorIndex is int && data.outfitColorIndex >= 0 && data.outfitColorIndex <= 7 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
     // --- COLLECTIONS ---
 
     // 1. User Profile (Strict Owner Isolation)
@@ -236,6 +246,41 @@ service cloud.firestore {
 
         allow update, delete: if false;
       }
+    }
+
+    // 3. Top 10 Player Scores Leaderboard (Signed-In Bounded Query Read, Owner-Only Write)
+    match /leaderboard/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && existing().score >= 0;
+      allow list: if isSignedIn() &&
+                     resource.data.score >= 0 &&
+                     request.query.limit != null &&
+                     request.query.limit <= 10;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'nickname', 'score', 'skinColorIndex', 'outfitColorIndex',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'nickname', 'score', 'skinColorIndex', 'outfitColorIndex',
+                         'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidLeaderboardScore(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidLeaderboardScore(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'nickname', 'score', 'skinColorIndex', 'outfitColorIndex', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
     }
   }
 }

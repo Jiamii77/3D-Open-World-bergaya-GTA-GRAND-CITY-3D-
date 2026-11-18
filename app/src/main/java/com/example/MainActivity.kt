@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.network.AuthManager
 import com.example.ui.AppRoute
 import com.example.ui.GameScreen
+import com.example.ui.LeaderboardRoute
 import com.example.ui.MainGameViewModel
 import com.example.ui.MainMenuScreen
 import com.example.ui.OnlineLobbyRoute
@@ -51,6 +52,7 @@ class MainActivity : ComponentActivity() {
 fun ViceRoamApp(mainVm: MainGameViewModel = viewModel()) {
   val route by mainVm.route.collectAsStateWithLifecycle()
   val profile by mainVm.profile.collectAsStateWithLifecycle()
+  val releaseUrl by mainVm.releaseUrl.collectAsStateWithLifecycle()
   val auth = remember { Firebase.auth }
   val currentUser by AuthManager.authStateFlow(auth)
     .collectAsStateWithLifecycle(initialValue = auth.currentUser)
@@ -64,6 +66,7 @@ fun ViceRoamApp(mainVm: MainGameViewModel = viewModel()) {
       MainMenuScreen(
         profile = profile,
         signedInEmail = currentUser?.email,
+        releaseUrl = releaseUrl,
         onPlaySingleplayer = {
           activeOnlineSessionVm = null
           mainVm.launchSingleplayer()
@@ -71,11 +74,17 @@ fun ViceRoamApp(mainVm: MainGameViewModel = viewModel()) {
         onOpenOnlineLobby = {
           mainVm.navigateTo(AppRoute.ONLINE_LOBBY)
         },
+        onOpenLeaderboard = {
+          mainVm.navigateTo(AppRoute.LEADERBOARD)
+        },
         onSaveCustomization = { nick, skin, outfit ->
           mainVm.updateCustomization(nick, skin, outfit)
         },
         onSaveSettings = { quality, sens, vol ->
           mainVm.updateSettings(quality, sens, vol)
+        },
+        onSaveReleaseUrl = { url ->
+          mainVm.updateReleaseUrl(url)
         },
       )
     }
@@ -92,6 +101,16 @@ fun ViceRoamApp(mainVm: MainGameViewModel = viewModel()) {
           activeOnlineSessionVm = sessionVm
           mainVm.navigateTo(AppRoute.IN_GAME)
         },
+        onBackToMenu = {
+          mainVm.navigateTo(AppRoute.MAIN_MENU)
+        },
+      )
+    }
+
+    AppRoute.LEADERBOARD -> {
+      LeaderboardRoute(
+        currentUser = currentUser,
+        profile = profile,
         onBackToMenu = {
           mainVm.navigateTo(AppRoute.MAIN_MENU)
         },

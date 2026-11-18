@@ -80,6 +80,21 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." }
       },
       "required": ["roomId", "senderId", "senderName", "eventType", "message", "createdAt"]
+    },
+    "LeaderboardScore": {
+      "title": "LeaderboardScore",
+      "description": "Public top-score entry for the Top 10 Vice Roam player leaderboard.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Player Firebase Auth UID matching document ID." },
+        "nickname": { "type": "string", "description": "Display nickname (2-20 chars)." },
+        "score": { "type": "integer", "description": "Player cash/points score (0-999999999)." },
+        "skinColorIndex": { "type": "integer", "description": "Selected skin tone index (0-5)." },
+        "outfitColorIndex": { "type": "integer", "description": "Selected outfit palette index (0-7)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["userId", "nickname", "score", "skinColorIndex", "outfitColorIndex", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -98,6 +113,10 @@
     "/rooms/{roomId}/events/{eventId}": {
       "schema": { "$ref": "#/entities/RoomEvent" },
       "description": "Live chat, emote, PvP hit, and race events inside a room."
+    },
+    "/leaderboard/{userId}": {
+      "schema": { "$ref": "#/entities/LeaderboardScore" },
+      "description": "Top player scores queried for the Top 10 leaderboard."
     }
   }
 }

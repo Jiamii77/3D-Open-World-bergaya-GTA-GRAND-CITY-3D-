@@ -176,3 +176,28 @@ data class RoomEventDoc(
     return raw.filterValues { it != null } as Map<String, Any>
   }
 }
+
+@Keep
+@IgnoreExtraProperties
+data class LeaderboardScoreDoc(
+  @DocumentId val id: String = "",
+  val userId: String = "",
+  val nickname: String = "StreetAce",
+  val score: Long = 0L,
+  val skinColorIndex: Long = 1L,
+  val outfitColorIndex: Long = 0L,
+  @ServerTimestamp val createdAt: Timestamp? = null,
+  @ServerTimestamp val updatedAt: Timestamp? = null,
+) {
+  fun toCreateMap(): Map<String, Any> =
+    mapOf(
+      "userId" to userId,
+      "nickname" to nickname.trim().take(20).let { if (it.length >= 2) it else "StreetAce" },
+      "score" to score.coerceIn(0L, 999_999_999L),
+      "skinColorIndex" to skinColorIndex.coerceIn(0L, 5L),
+      "outfitColorIndex" to outfitColorIndex.coerceIn(0L, 7L),
+      "createdAt" to FieldValue.serverTimestamp(),
+      "updatedAt" to FieldValue.serverTimestamp(),
+    )
+}
+

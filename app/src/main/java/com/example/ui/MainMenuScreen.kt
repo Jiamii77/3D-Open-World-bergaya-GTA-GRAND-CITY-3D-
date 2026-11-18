@@ -1,5 +1,9 @@
 package com.example.ui
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -26,20 +30,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SportsEsports
+import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -55,6 +64,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,21 +72,27 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.BuildConfig
 import com.example.R
+import com.example.data.ApkExportManager
 import com.example.game.CharacterPalettes
 import com.example.game.GraphicsQuality
 import com.example.game.PlayerProfileState
+import kotlinx.coroutines.launch
+import java.util.Locale
 import com.example.ui.theme.NeonCyan
 import com.example.ui.theme.SunsetCoral
 import com.example.ui.theme.TextSecondary
 import com.example.ui.theme.ViceAmber
 import com.example.ui.theme.ViceCardBorder
+import com.example.ui.theme.ViceCrimson
 import com.example.ui.theme.ViceEmerald
 import com.example.ui.theme.ViceMidnight
 import com.example.ui.theme.ViceSurface
@@ -86,13 +102,17 @@ import com.example.ui.theme.ViceSurfaceElevated
 fun MainMenuScreen(
   profile: PlayerProfileState,
   signedInEmail: String?,
+  releaseUrl: String,
   onPlaySingleplayer: () -> Unit,
   onOpenOnlineLobby: () -> Unit,
+  onOpenLeaderboard: () -> Unit,
   onSaveCustomization: (nickname: String, skinIdx: Int, outfitIdx: Int) -> Unit,
   onSaveSettings: (quality: GraphicsQuality, sensitivity: Float, volume: Float) -> Unit,
+  onSaveReleaseUrl: (url: String) -> Unit,
 ) {
   var showCustomize by remember { mutableStateOf(false) }
   var showSettings by remember { mutableStateOf(false) }
+  var showSystemApkDialog by remember { mutableStateOf(false) }
 
   Box(
     modifier = Modifier
@@ -236,7 +256,7 @@ fun MainMenuScreen(
 
         Row(
           modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.spacedBy(10.dp),
+          horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
           OutlinedButton(
             onClick = { showCustomize = true },
@@ -248,31 +268,46 @@ fun MainMenuScreen(
             colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
           ) {
             Icon(Icons.Outlined.Tune, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.btn_customize), maxLines = 1, overflow = TextOverflow.Ellipsis)
+          }
+
+          OutlinedButton(
+            onClick = onOpenLeaderboard,
+            modifier = Modifier
+              .weight(1f)
+              .height(48.dp)
+              .testTag("open_leaderboard_button"),
+            border = BorderStroke(1.dp, ViceAmber.copy(alpha = 0.7f)),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = ViceAmber),
+          ) {
+            Icon(Icons.Filled.EmojiEvents, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(4.dp))
+            Text(stringResource(R.string.btn_leaderboard), maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
 
           OutlinedButton(
             onClick = { showSettings = true },
             modifier = Modifier
-              .weight(1f)
+              .weight(0.9f)
               .height(48.dp)
               .testTag("settings_button"),
             border = BorderStroke(1.dp, ViceCardBorder),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
           ) {
             Icon(Icons.Filled.Settings, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             Text(stringResource(R.string.btn_settings), maxLines = 1, overflow = TextOverflow.Ellipsis)
           }
         }
       }
 
-      // Right Column: Game Mode Cards
+      // Right Column: Game Mode Cards + System Update & APK Export
       Column(
         modifier = Modifier
           .weight(1f)
-          .fillMaxHeight(),
+          .fillMaxHeight()
+          .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.Center,
       ) {
         ModeLaunchCard(
@@ -285,7 +320,7 @@ fun MainMenuScreen(
           onClick = onPlaySingleplayer,
         )
 
-        Spacer(Modifier.height(14.dp))
+        Spacer(Modifier.height(12.dp))
 
         ModeLaunchCard(
           title = stringResource(R.string.mode_multiplayer),
@@ -300,23 +335,61 @@ fun MainMenuScreen(
         Spacer(Modifier.height(12.dp))
 
         Card(
-          colors = CardDefaults.cardColors(containerColor = ViceSurface.copy(alpha = 0.78f)),
-          border = BorderStroke(1.dp, ViceCardBorder),
-          shape = RoundedCornerShape(12.dp),
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("open_system_apk_button")
+            .clickable { showSystemApkDialog = true },
+          colors = CardDefaults.cardColors(containerColor = ViceSurface.copy(alpha = 0.88f)),
+          border = BorderStroke(1.dp, ViceEmerald.copy(alpha = 0.6f)),
+          shape = RoundedCornerShape(14.dp),
         ) {
           Row(
             modifier = Modifier
               .fillMaxWidth()
-              .padding(horizontal = 14.dp, vertical = 10.dp),
+              .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
           ) {
-            Icon(Icons.Filled.DirectionsCar, contentDescription = null, tint = ViceAmber, modifier = Modifier.size(20.dp))
-            Text(
-              text = "Kunjungi Toko Senjata, Garasi Kendaraan & Safe House di Minimap kota.",
-              style = MaterialTheme.typography.bodyMedium,
-              color = TextSecondary,
-            )
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(10.dp),
+              modifier = Modifier.weight(1f),
+            ) {
+              Icon(
+                imageVector = Icons.Filled.SystemUpdate,
+                contentDescription = null,
+                tint = ViceEmerald,
+                modifier = Modifier.size(22.dp),
+              )
+              Column {
+                Text(
+                  text = stringResource(R.string.btn_system_apk),
+                  style = MaterialTheme.typography.titleMedium,
+                  color = Color.White,
+                )
+                Text(
+                  text = "Versi ${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE}) • Ekspor APK & Pembaruan",
+                  style = MaterialTheme.typography.bodyMedium,
+                  color = TextSecondary,
+                  maxLines = 1,
+                  overflow = TextOverflow.Ellipsis,
+                )
+              }
+            }
+            Surface(
+              color = ViceEmerald.copy(alpha = 0.16f),
+              shape = RoundedCornerShape(8.dp),
+              border = BorderStroke(1.dp, ViceEmerald.copy(alpha = 0.5f)),
+            ) {
+              Row(
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+              ) {
+                Icon(Icons.Filled.Download, contentDescription = null, tint = ViceEmerald, modifier = Modifier.size(16.dp))
+                Text("APK", style = MaterialTheme.typography.labelLarge, color = ViceEmerald)
+              }
+            }
           }
         }
       }
@@ -342,6 +415,14 @@ fun MainMenuScreen(
         onSaveSettings(q, sens, vol)
         showSettings = false
       },
+    )
+  }
+
+  if (showSystemApkDialog) {
+    SystemAndApkDialog(
+      savedReleaseUrl = releaseUrl,
+      onSaveReleaseUrl = onSaveReleaseUrl,
+      onDismiss = { showSystemApkDialog = false },
     )
   }
 }
@@ -533,3 +614,184 @@ private fun SettingsDialog(
     },
   )
 }
+
+@Composable
+private fun SystemAndApkDialog(
+  savedReleaseUrl: String,
+  onSaveReleaseUrl: (String) -> Unit,
+  onDismiss: () -> Unit,
+) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val apkInfo = remember(context) { ApkExportManager.getInstalledApkInfo(context) }
+
+  var isExporting by remember { mutableStateOf(false) }
+  var exportStatus by remember { mutableStateOf<String?>(null) }
+  var exportError by remember { mutableStateOf(false) }
+
+  var releaseUrlInput by remember(savedReleaseUrl) { mutableStateOf(savedReleaseUrl) }
+  var updateLinkError by remember { mutableStateOf<String?>(null) }
+
+  val saveApkLauncher = rememberLauncherForActivityResult(
+    contract = ActivityResultContracts.CreateDocument("application/vnd.android.package-archive")
+  ) { destinationUri ->
+    if (destinationUri == null) return@rememberLauncherForActivityResult
+    isExporting = true
+    exportStatus = null
+    scope.launch {
+      val result = ApkExportManager.exportInstalledApkToUri(context, destinationUri)
+      isExporting = false
+      result.fold(
+        onSuccess = { bytes ->
+          exportError = false
+          val mb = String.format(Locale.US, "%.1f MB", bytes / (1024.0 * 1024.0))
+          exportStatus = "File APK berhasil disimpan ($mb)."
+        },
+        onFailure = { err ->
+          exportError = true
+          exportStatus = err.localizedMessage ?: "Gagal mengekspor file APK."
+        },
+      )
+    }
+  }
+
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    containerColor = ViceSurface,
+    title = {
+      Text(
+        text = stringResource(R.string.system_apk_title),
+        style = MaterialTheme.typography.headlineMedium,
+        color = Color.White,
+      )
+    },
+    text = {
+      Column(
+        modifier = Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+      ) {
+        // Section 1: Save Installed Game as .APK via Storage Access Framework
+        Card(
+          colors = CardDefaults.cardColors(containerColor = ViceSurfaceElevated),
+          border = BorderStroke(1.dp, ViceEmerald.copy(alpha = 0.5f)),
+          shape = RoundedCornerShape(12.dp),
+        ) {
+          Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+          ) {
+            Text(
+              text = "Ekspor / Unduh Paket Game (.APK)",
+              style = MaterialTheme.typography.titleMedium,
+              color = ViceEmerald,
+            )
+            Text(
+              text = "Versi: v${apkInfo.versionName} (Build ${apkInfo.versionCode}) • ${apkInfo.formattedSizeMb}\nPaket: ${apkInfo.applicationId}",
+              style = MaterialTheme.typography.bodyMedium,
+              color = TextSecondary,
+            )
+
+            if (exportStatus != null) {
+              Text(
+                text = exportStatus!!,
+                style = MaterialTheme.typography.bodyMedium,
+                color = if (exportError) ViceCrimson else ViceEmerald,
+              )
+            }
+
+            Button(
+              onClick = {
+                saveApkLauncher.launch("ViceRoam-v${apkInfo.versionName}.apk")
+              },
+              enabled = apkInfo.isSourceAvailable && !isExporting,
+              modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+                .testTag("save_apk_button"),
+              colors = ButtonDefaults.buttonColors(
+                containerColor = ViceEmerald,
+                contentColor = ViceMidnight,
+              ),
+            ) {
+              if (isExporting) {
+                CircularProgressIndicator(
+                  modifier = Modifier.size(18.dp),
+                  color = ViceMidnight,
+                  strokeWidth = 2.dp,
+                )
+              } else {
+                Icon(Icons.Filled.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(6.dp))
+                Text(stringResource(R.string.btn_save_apk), fontWeight = FontWeight.Bold)
+              }
+            }
+          }
+        }
+
+        HorizontalDivider(color = ViceCardBorder)
+
+        // Section 2: Compliant External Game System Update Link (ACTION_VIEW)
+        Text(
+          text = "Pembaruan Sistem Game (Rilis Eksternal / GitHub)",
+          style = MaterialTheme.typography.titleMedium,
+          color = NeonCyan,
+        )
+        Text(
+          text = "Catatan sistem saat ini: v${apkInfo.versionName} (${apkInfo.buildType}) mencakup Kota 3D OpenGL ES, Online Free Roam, dan Papan Skor Top 10.",
+          style = MaterialTheme.typography.bodyMedium,
+          color = TextSecondary,
+        )
+
+        OutlinedTextField(
+          value = releaseUrlInput,
+          onValueChange = {
+            releaseUrlInput = it
+            updateLinkError = null
+          },
+          label = { Text("URL Rilis Resmi (contoh: https://github.com/.../releases)") },
+          singleLine = true,
+          modifier = Modifier
+            .fillMaxWidth()
+            .testTag("release_url_input"),
+        )
+
+        if (updateLinkError != null) {
+          Text(updateLinkError!!, style = MaterialTheme.typography.bodyMedium, color = ViceCrimson)
+        }
+
+        val trimmedUrl = releaseUrlInput.trim()
+        val isValidHttpUrl = trimmedUrl.startsWith("https://") || trimmedUrl.startsWith("http://")
+
+        OutlinedButton(
+          onClick = {
+            if (!isValidHttpUrl) {
+              updateLinkError = "Masukkan URL valid yang diawali https:// atau http://"
+              return@OutlinedButton
+            }
+            onSaveReleaseUrl(trimmedUrl)
+            try {
+              val intent = Intent(Intent.ACTION_VIEW, Uri.parse(trimmedUrl))
+              context.startActivity(intent)
+            } catch (e: Exception) {
+              updateLinkError = e.localizedMessage ?: "Tidak dapat membuka browser."
+            }
+          },
+          modifier = Modifier
+            .fillMaxWidth()
+            .height(48.dp)
+            .testTag("open_update_url_button"),
+          border = BorderStroke(1.dp, NeonCyan.copy(alpha = 0.7f)),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan),
+        ) {
+          Icon(Icons.Filled.OpenInBrowser, contentDescription = null, modifier = Modifier.size(18.dp))
+          Spacer(Modifier.width(6.dp))
+          Text(stringResource(R.string.btn_open_update_link))
+        }
+      }
+    },
+    confirmButton = {
+      TextButton(onClick = onDismiss) { Text("Tutup") }
+    },
+  )
+}
+

@@ -14,6 +14,7 @@ import com.google.firebase.firestore.DocumentSnapshot
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -507,6 +508,99 @@ class FirestoreMultiplayerRepository(
           throw error
         }
     )
+  }
+
+  fun observeTopScores(limitCount: Long = 10L): Flow<List<LeaderboardScoreDoc>> = flow {
+    val uid = requireUserId()
+    val path = "leaderboard"
+    val clampedLimit = limitCount.coerceIn(1L, 10L)
+    emitAll(
+      db.collection(path)
+        .whereGreaterThanOrEqualTo("score", 0L)
+        .orderBy("score", Query.Direction.DESCENDING)
+        .limit(clampedLimit)
+        .snapshots()
+        .map { snap ->
+          snap.toObjects(LeaderboardScoreDoc::class.java, DocumentSnapshot.ServerTimestampBehavior.ESTIMATE)
+        }
+        .catch { error ->
+          val fsErr = generateSequence(error) { it.cause }
+            .filterIsInstance<FirebaseFirestoreException>()
+            .firstOrNull()
+          if (fsErr == null && error is CancellationException) throw error
+          if (auth.currentUser?.uid == uid) {
+            handleFirestoreError(fsErr ?: error, OperationType.LIST, path)
+          }
+          throw error
+        }
+    )
+  }
+
+  suspend fun fetchTopScoresOnce(limitCount: Long = 10L): Result<List<LeaderboardScoreDoc>> {
+    val path = "leaderboard"
+    return try {
+      requireUserId()
+      val clampedLimit = limitCount.coerceIn(1L, 10L)
+      val snap = db.collection(path)
+        .whereGreaterThanOrEqualTo("score", 0L)
+        .orderBy("score", Query.Direction.DESCENDING)
+        .limit(clampedLimit)
+        .get()
+        .await()
+      val scores = snap.toObjects(
+        LeaderboardScoreDoc::class.java,
+        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE,
+      )
+      Result.success(scores)
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.LIST, path)
+      Result.failure(e)
+    }
+  }
+
+  suspend fun publishPlayerScore(profile: PlayerProfileState, scoreOverride: Int? = null): Result<Long> {
+    val uid = auth.currentUser?.uid
+    val path = "leaderboard/${uid ?: "unauthenticated"}"
+    return try {
+      val verifiedUid = requireUserId()
+      val docRef = db.collection("leaderboard").document(verifiedUid)
+      val cleanNickname = profile.nickname.trim().take(20).let {
+        if (it.length >= 2) it else "StreetAce"
+      }
+      val candidateScore = (scoreOverride ?: profile.cash).toLong().coerceIn(0L, 999_999_999L)
+      val existing = docRef.get().await()
+      if (!existing.exists()) {
+        val doc = LeaderboardScoreDoc(
+          userId = verifiedUid,
+          nickname = cleanNickname,
+          score = candidateScore,
+          skinColorIndex = profile.skinColorIndex.toLong().coerceIn(0L, 5L),
+          outfitColorIndex = profile.outfitColorIndex.toLong().coerceIn(0L, 7L),
+        )
+        docRef.set(doc.toCreateMap()).await()
+        Result.success(candidateScore)
+      } else {
+        val prevScore = (existing.getLong("score") ?: 0L).coerceIn(0L, 999_999_999L)
+        val bestScore = maxOf(prevScore, candidateScore)
+        docRef.update(
+          mapOf(
+            "nickname" to cleanNickname,
+            "score" to bestScore,
+            "skinColorIndex" to profile.skinColorIndex.toLong().coerceIn(0L, 5L),
+            "outfitColorIndex" to profile.outfitColorIndex.toLong().coerceIn(0L, 7L),
+            "updatedAt" to FieldValue.serverTimestamp(),
+          )
+        ).await()
+        Result.success(bestScore)
+      }
+    } catch (e: CancellationException) {
+      throw e
+    } catch (e: Exception) {
+      handleFirestoreError(e, OperationType.WRITE, path)
+      Result.failure(e)
+    }
   }
 }
 

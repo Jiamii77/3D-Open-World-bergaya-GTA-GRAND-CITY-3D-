@@ -232,3 +232,70 @@ test("Multiplayer rooms enforce filtered list queries, player ownership, and imm
       .update({ message: "Edited" })
   );
 });
+
+function validLeaderboardPayload(uid, score = 5000) {
+  const now = new Date(Date.now() - 1000);
+  return {
+    userId: uid,
+    nickname: "ViperAce",
+    score,
+    skinColorIndex: 1,
+    outfitColorIndex: 2,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+test("Leaderboard enforces owner-only writes, bounded top-10 queries, and blocks unauthenticated/spoofed access", async () => {
+  const unauth = testEnv.unauthenticatedContext().firestore();
+  const alice = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bob = testEnv.authenticatedContext(BOB_UID).firestore();
+
+  // Unauthenticated query/write fails
+  await assertFails(
+    unauth.collection("leaderboard").where("score", ">=", 0).orderBy("score", "desc").limit(10).get()
+  );
+  await assertFails(
+    unauth.collection("leaderboard").doc(ALICE_UID).set(validLeaderboardPayload(ALICE_UID))
+  );
+
+  // Alice and Bob post their own scores
+  await assertSucceeds(
+    alice.collection("leaderboard").doc(ALICE_UID).set(validLeaderboardPayload(ALICE_UID, 8500))
+  );
+  await assertSucceeds(
+    bob.collection("leaderboard").doc(BOB_UID).set(validLeaderboardPayload(BOB_UID, 4200))
+  );
+
+  // Partial update on own score succeeds; cross-user update fails; createdAt tamper fails
+  await assertSucceeds(
+    alice.collection("leaderboard").doc(ALICE_UID).update({
+      score: 9200,
+      updatedAt: new Date(Date.now() - 200),
+    })
+  );
+  await assertFails(
+    bob.collection("leaderboard").doc(ALICE_UID).update({
+      score: 0,
+      updatedAt: new Date(Date.now() - 200),
+    })
+  );
+  await assertFails(
+    alice.collection("leaderboard").doc(ALICE_UID).update({
+      createdAt: new Date(Date.now() - 200),
+      updatedAt: new Date(Date.now() - 200),
+    })
+  );
+
+  // Bounded Top-10 query matching Kotlin repository succeeds
+  await assertSucceeds(
+    bob.collection("leaderboard").where("score", ">=", 0).orderBy("score", "desc").limit(10).get()
+  );
+
+  // Unbounded or over-limit (>10) queries fail
+  await assertFails(bob.collection("leaderboard").get());
+  await assertFails(
+    bob.collection("leaderboard").where("score", ">=", 0).orderBy("score", "desc").limit(15).get()
+  );
+});
+
