@@ -1,0 +1,103 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Player customization, cash, unlocked weapons, and preferences synced for the authenticated user.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the owner." },
+        "nickname": { "type": "string", "description": "Display nickname (2-20 chars)." },
+        "skinColorIndex": { "type": "integer", "description": "Selected skin tone index (0-5)." },
+        "outfitColorIndex": { "type": "integer", "description": "Selected outfit palette index (0-7)." },
+        "cash": { "type": "integer", "description": "In-game currency balance." },
+        "unlockedWeapons": { "type": "array", "description": "Unlocked weapon category names (max 5)." },
+        "graphicsQuality": { "type": "string", "enum": ["LOW", "MEDIUM", "HIGH"], "description": "3D graphics quality preset." },
+        "cameraSensitivity": { "type": "number", "description": "Third-person camera touch drag sensitivity." },
+        "audioVolume": { "type": "number", "description": "Master SFX and engine audio volume (0.0-1.0)." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp via FieldValue.serverTimestamp()." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp via FieldValue.serverTimestamp()." }
+      },
+      "required": ["userId", "nickname", "skinColorIndex", "outfitColorIndex", "cash", "unlockedWeapons", "graphicsQuality", "cameraSensitivity", "audioVolume", "createdAt", "updatedAt"]
+    },
+    "MultiplayerRoom": {
+      "title": "MultiplayerRoom",
+      "description": "Online Free Roam city server room supporting 16-32 players.",
+      "type": "object",
+      "properties": {
+        "hostUid": { "type": "string", "description": "Creator Firebase Auth UID." },
+        "name": { "type": "string", "description": "Room display name (3-32 chars)." },
+        "visibility": { "type": "string", "enum": ["PUBLIC", "PRIVATE"], "description": "Room visibility mode." },
+        "maxPlayers": { "type": "integer", "description": "Maximum players allowed (16-32)." },
+        "pvpEnabled": { "type": "boolean", "description": "Whether PvP damage outside safe zone is enabled." },
+        "playerCount": { "type": "integer", "description": "Current active player count." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server update timestamp." }
+      },
+      "required": ["hostUid", "name", "visibility", "maxPlayers", "pvpEnabled", "playerCount", "createdAt", "updatedAt"]
+    },
+    "RoomPlayer": {
+      "title": "RoomPlayer",
+      "description": "Real-time player transform, vehicle, weapon, and status state inside a multiplayer room.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Player Firebase Auth UID matching document ID." },
+        "roomId": { "type": "string", "description": "Parent room ID." },
+        "nickname": { "type": "string", "description": "Player nickname." },
+        "skinColorIndex": { "type": "integer", "description": "Skin color index (0-5)." },
+        "outfitColorIndex": { "type": "integer", "description": "Outfit color index (0-7)." },
+        "x": { "type": "number", "description": "World X position." },
+        "y": { "type": "number", "description": "World Y position." },
+        "z": { "type": "number", "description": "World Z position." },
+        "yaw": { "type": "number", "description": "Heading angle in radians or degrees." },
+        "speed": { "type": "number", "description": "Movement speed." },
+        "animState": { "type": "string", "description": "Character animation state (IDLE, WALK, RUN, DRIVE, SHOOT, DOWN)." },
+        "vehicleType": { "type": "string", "description": "Current vehicle type (NONE, SEDAN, SUV, MOTO)." },
+        "vehicleHp": { "type": "integer", "description": "Current vehicle HP." },
+        "hp": { "type": "integer", "description": "Player health (0-100)." },
+        "armor": { "type": "integer", "description": "Player armor (0-100)." },
+        "wantedStars": { "type": "integer", "description": "Wanted stars (0-5)." },
+        "weaponIndex": { "type": "integer", "description": "Equipped weapon slot (0-4)." },
+        "inSafeZone": { "type": "boolean", "description": "Whether player is inside spawn safe zone." },
+        "shotSeq": { "type": "integer", "description": "Monotonic shot counter for muzzle flash sync." },
+        "emoteText": { "type": "string", "description": "Optional latest quick emote/callout." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Join timestamp." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last sync timestamp." }
+      },
+      "required": ["userId", "roomId", "nickname", "skinColorIndex", "outfitColorIndex", "x", "y", "z", "yaw", "speed", "animState", "vehicleType", "vehicleHp", "hp", "armor", "wantedStars", "weaponIndex", "inSafeZone", "shotSeq", "createdAt", "updatedAt"]
+    },
+    "RoomEvent": {
+      "title": "RoomEvent",
+      "description": "Immutable chat, emote, PvP hit, or street race event inside a room.",
+      "type": "object",
+      "properties": {
+        "roomId": { "type": "string", "description": "Parent room ID." },
+        "senderId": { "type": "string", "description": "Sender Firebase Auth UID." },
+        "senderName": { "type": "string", "description": "Sender nickname." },
+        "eventType": { "type": "string", "enum": ["CHAT", "EMOTE", "HIT", "RACE"], "description": "Event category." },
+        "message": { "type": "string", "description": "Chat/emote text or race callout." },
+        "targetUid": { "type": "string", "description": "Optional target player UID for PvP HIT events." },
+        "damage": { "type": "integer", "description": "Optional damage amount for PvP HIT events." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server creation timestamp." }
+      },
+      "required": ["roomId", "senderId", "senderName", "eventType", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Per-user private profile and game settings."
+    },
+    "/rooms/{roomId}": {
+      "schema": { "$ref": "#/entities/MultiplayerRoom" },
+      "description": "Multiplayer Online Free Roam city rooms."
+    },
+    "/rooms/{roomId}/players/{playerId}": {
+      "schema": { "$ref": "#/entities/RoomPlayer" },
+      "description": "Live synchronized player entities inside a room."
+    },
+    "/rooms/{roomId}/events/{eventId}": {
+      "schema": { "$ref": "#/entities/RoomEvent" },
+      "description": "Live chat, emote, PvP hit, and race events inside a room."
+    }
+  }
+}

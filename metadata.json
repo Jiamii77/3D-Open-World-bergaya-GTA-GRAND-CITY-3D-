@@ -1,0 +1,8 @@
+{
+  "name": "Remix Vice Roam",
+  "description": "Game 3D Open-World Action-Adventure bergaya GTA untuk Android dengan siklus siang-malam, kendaraan, sistem wanted polisi, dan mode Online Free Roam.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

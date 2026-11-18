@@ -1,0 +1,241 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL HARDENED HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    // --- ENTITY VALIDATION BLUEPRINTS ---
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.nickname is string && data.nickname.size() >= 2 && data.nickname.size() <= 20 &&
+             data.skinColorIndex is int && data.skinColorIndex >= 0 && data.skinColorIndex <= 5 &&
+             data.outfitColorIndex is int && data.outfitColorIndex >= 0 && data.outfitColorIndex <= 7 &&
+             data.cash is int && data.cash >= 0 && data.cash <= 999999999 &&
+             data.unlockedWeapons is list && data.unlockedWeapons.size() >= 1 && data.unlockedWeapons.size() <= 5 &&
+             (data.unlockedWeapons.size() == 0 || data.unlockedWeapons[0] is string) &&
+             data.graphicsQuality in ['LOW', 'MEDIUM', 'HIGH'] &&
+             data.cameraSensitivity is number && data.cameraSensitivity >= 0.2 && data.cameraSensitivity <= 2.5 &&
+             data.audioVolume is number && data.audioVolume >= 0.0 && data.audioVolume <= 1.0 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRoom(data) {
+      return data.hostUid is string && data.hostUid.size() >= 1 && data.hostUid.size() <= 128 &&
+             data.name is string && data.name.size() >= 3 && data.name.size() <= 32 &&
+             data.visibility in ['PUBLIC', 'PRIVATE'] &&
+             data.maxPlayers is int && data.maxPlayers >= 2 && data.maxPlayers <= 32 &&
+             data.pvpEnabled is bool &&
+             data.playerCount is int && data.playerCount >= 0 && data.playerCount <= 32 &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRoomPlayer(data) {
+      return data.userId is string && data.userId.size() >= 1 && data.userId.size() <= 128 &&
+             data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 128 &&
+             data.nickname is string && data.nickname.size() >= 2 && data.nickname.size() <= 20 &&
+             data.skinColorIndex is int && data.skinColorIndex >= 0 && data.skinColorIndex <= 5 &&
+             data.outfitColorIndex is int && data.outfitColorIndex >= 0 && data.outfitColorIndex <= 7 &&
+             data.x is number && data.x >= -1000.0 && data.x <= 1000.0 &&
+             data.y is number && data.y >= -50.0 && data.y <= 200.0 &&
+             data.z is number && data.z >= -1000.0 && data.z <= 1000.0 &&
+             data.yaw is number && data.yaw >= -3600.0 && data.yaw <= 3600.0 &&
+             data.speed is number && data.speed >= -50.0 && data.speed <= 120.0 &&
+             data.animState is string && data.animState.size() >= 1 && data.animState.size() <= 20 &&
+             data.vehicleType in ['NONE', 'SEDAN', 'SUV', 'MOTO'] &&
+             data.vehicleHp is int && data.vehicleHp >= 0 && data.vehicleHp <= 500 &&
+             data.hp is int && data.hp >= 0 && data.hp <= 100 &&
+             data.armor is int && data.armor >= 0 && data.armor <= 100 &&
+             data.wantedStars is int && data.wantedStars >= 0 && data.wantedStars <= 5 &&
+             data.weaponIndex is int && data.weaponIndex >= 0 && data.weaponIndex <= 4 &&
+             data.inSafeZone is bool &&
+             data.shotSeq is int && data.shotSeq >= 0 &&
+             (!('emoteText' in data) || (data.emoteText is string && data.emoteText.size() <= 40)) &&
+             isValidTimestamp(data.createdAt) &&
+             isValidTimestamp(data.updatedAt);
+    }
+
+    function isValidRoomEvent(data) {
+      return data.roomId is string && data.roomId.size() >= 1 && data.roomId.size() <= 128 &&
+             data.senderId is string && data.senderId.size() >= 1 && data.senderId.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 20 &&
+             data.eventType in ['CHAT', 'EMOTE', 'HIT', 'RACE'] &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 120 &&
+             (!('targetUid' in data) || (data.targetUid is string && data.targetUid.size() <= 128)) &&
+             (!('damage' in data) || (data.damage is int && data.damage >= 0 && data.damage <= 100)) &&
+             isValidTimestamp(data.createdAt);
+    }
+
+    // --- COLLECTIONS ---
+
+    // 1. User Profile (Strict Owner Isolation)
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && request.auth.uid == userId;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'userId', 'nickname', 'skinColorIndex', 'outfitColorIndex',
+                         'cash', 'unlockedWeapons', 'graphicsQuality',
+                         'cameraSensitivity', 'audioVolume', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'userId', 'nickname', 'skinColorIndex', 'outfitColorIndex',
+                         'cash', 'unlockedWeapons', 'graphicsQuality',
+                         'cameraSensitivity', 'audioVolume', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly([
+                         'nickname', 'skinColorIndex', 'outfitColorIndex',
+                         'cash', 'unlockedWeapons', 'graphicsQuality',
+                         'cameraSensitivity', 'audioVolume', 'updatedAt'
+                       ]);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    // 2. Multiplayer Free Roam Rooms
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() &&
+                    isValidId(roomId) &&
+                    (existing().visibility == 'PUBLIC' || existing().hostUid == request.auth.uid || existing().visibility == 'PRIVATE');
+
+      allow list: if isSignedIn() &&
+                     (resource.data.visibility == 'PUBLIC' || resource.data.hostUid == request.auth.uid);
+
+      allow create: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       incoming().hostUid == request.auth.uid &&
+                       incoming().keys().hasAll([
+                         'hostUid', 'name', 'visibility', 'maxPlayers',
+                         'pvpEnabled', 'playerCount', 'createdAt', 'updatedAt'
+                       ]) &&
+                       incoming().keys().hasOnly([
+                         'hostUid', 'name', 'visibility', 'maxPlayers',
+                         'pvpEnabled', 'playerCount', 'createdAt', 'updatedAt'
+                       ]) &&
+                       isValidRoom(incoming());
+
+      allow update: if isSignedIn() &&
+                       isValidId(roomId) &&
+                       incoming().hostUid == existing().hostUid &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().maxPlayers == existing().maxPlayers &&
+                       isValidRoom(incoming()) &&
+                       (
+                         (existing().hostUid == request.auth.uid &&
+                          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'visibility', 'pvpEnabled', 'playerCount', 'updatedAt'])) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['playerCount', 'updatedAt'])
+                       );
+
+      allow delete: if isSignedIn() && isValidId(roomId) && existing().hostUid == request.auth.uid;
+
+      // 2a. Active Players in Room
+      match /players/{playerId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(playerId) && existing().roomId == roomId;
+        allow list: if isSignedIn() && resource.data.roomId == roomId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(playerId) &&
+                         playerId == request.auth.uid &&
+                         incoming().userId == request.auth.uid &&
+                         incoming().roomId == roomId &&
+                         incoming().keys().hasAll([
+                           'userId', 'roomId', 'nickname', 'skinColorIndex', 'outfitColorIndex',
+                           'x', 'y', 'z', 'yaw', 'speed', 'animState', 'vehicleType',
+                           'vehicleHp', 'hp', 'armor', 'wantedStars', 'weaponIndex',
+                           'inSafeZone', 'shotSeq', 'createdAt', 'updatedAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'userId', 'roomId', 'nickname', 'skinColorIndex', 'outfitColorIndex',
+                           'x', 'y', 'z', 'yaw', 'speed', 'animState', 'vehicleType',
+                           'vehicleHp', 'hp', 'armor', 'wantedStars', 'weaponIndex',
+                           'inSafeZone', 'shotSeq', 'emoteText', 'createdAt', 'updatedAt'
+                         ]) &&
+                         isValidRoomPlayer(incoming()) &&
+                         exists(/databases/$(database)/documents/rooms/$(roomId));
+
+        allow update: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(playerId) &&
+                         playerId == request.auth.uid &&
+                         existing().userId == request.auth.uid &&
+                         incoming().userId == existing().userId &&
+                         incoming().roomId == existing().roomId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidRoomPlayer(incoming()) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly([
+                           'nickname', 'skinColorIndex', 'outfitColorIndex',
+                           'x', 'y', 'z', 'yaw', 'speed', 'animState', 'vehicleType',
+                           'vehicleHp', 'hp', 'armor', 'wantedStars', 'weaponIndex',
+                           'inSafeZone', 'shotSeq', 'emoteText', 'updatedAt'
+                         ]);
+
+        allow delete: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(playerId) &&
+                         (playerId == request.auth.uid ||
+                          get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid == request.auth.uid);
+      }
+
+      // 2b. Room Chat / Emotes / PvP Hit / Race Events
+      match /events/{eventId} {
+        allow get: if isSignedIn() && isValidId(roomId) && isValidId(eventId) && existing().roomId == roomId;
+        allow list: if isSignedIn() && resource.data.roomId == roomId;
+
+        allow create: if isSignedIn() &&
+                         isValidId(roomId) &&
+                         isValidId(eventId) &&
+                         incoming().senderId == request.auth.uid &&
+                         incoming().roomId == roomId &&
+                         incoming().keys().hasAll([
+                           'roomId', 'senderId', 'senderName', 'eventType', 'message', 'createdAt'
+                         ]) &&
+                         incoming().keys().hasOnly([
+                           'roomId', 'senderId', 'senderName', 'eventType', 'message',
+                           'targetUid', 'damage', 'createdAt'
+                         ]) &&
+                         isValidRoomEvent(incoming()) &&
+                         exists(/databases/$(database)/documents/rooms/$(roomId));
+
+        allow update, delete: if false;
+      }
+    }
+  }
+}

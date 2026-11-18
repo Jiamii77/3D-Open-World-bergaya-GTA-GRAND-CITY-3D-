@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Vice Roam</string>
+    <string name="tagline_subtitle">3D OPEN-WORLD ACTION SANDBOX</string>
+    <string name="mode_singleplayer">Singleplayer (Offline)</string>
+    <string name="mode_singleplayer_desc">Jelajahi kota bebas, kejaran polisi &amp; kendaraan tanpa koneksi</string>
+    <string name="mode_multiplayer">Online Free Roam</string>
+    <string name="mode_multiplayer_desc">Gabung server 16-32 pemain, balapan liar &amp; PvP</string>
+    <string name="btn_customize">Kustomisasi Karakter</string>
+    <string name="btn_settings">Pengaturan</string>
+    <string name="btn_sign_in_google">Sign in with Google</string>
+    <string name="btn_sign_out">Keluar Akun</string>
+    <string name="safe_zone_label">SAFE ZONE</string>
+</resources>
